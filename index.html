@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="캘린더">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="./manifest.json">
+<title>캘린더</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#000;--surface:#111;--surface2:#1a1a1a;--border:#2a2a2a;
+  --text:#f0f0f0;--muted:#666;--light:#333;
+  --accent:#4a6cf7;--accent-bg:#1a1f3a;
+  --today:#4a6cf7;--sun:#f87171;--sat:#60a5fa;--lunar:#505050;
+  --bday:#f97316;--green:#22c55e;--yellow:#eab308;--red:#ef4444;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bot:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);overscroll-behavior:none;}
+body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;}
+
+/* ── VIEWS ── */
+.view{display:none;flex-direction:column;height:100vh;}
+.view.active{display:flex;}
+
+/* ══════════════════════════════════
+   WIDGET VIEW  (홈화면 미리보기 느낌)
+══════════════════════════════════ */
+#widgetView{
+  background:linear-gradient(160deg,#0a0a0a 0%,#111 100%);
+  padding:calc(var(--safe-top) + 20px) 20px calc(var(--safe-bot) + 20px);
+  gap:16px;
+  overflow-y:auto;
+}
+
+.widget-hero{
+  background:var(--surface);
+  border-radius:22px;
+  border:1px solid var(--border);
+  overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+}
+
+/* Widget header */
+.w-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 18px 12px;
+  border-bottom:1px solid var(--border);
+}
+.w-month-info{display:flex;flex-direction:column;gap:2px;}
+.w-month{font-size:20px;font-weight:800;letter-spacing:-.5px;}
+.w-lunar-month{font-size:11px;color:var(--muted);}
+.w-nav{display:flex;gap:8px;align-items:center;}
+.w-nav-btn{width:30px;height:30px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation;}
+.w-nav-btn:active{background:var(--border);}
+.w-today-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);}
+
+/* Widget weekday row */
+.w-weekdays{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  padding:8px 8px 4px;
+  gap:2px;
+}
+.w-wd{text-align:center;font-size:10px;font-weight:700;color:var(--muted);}
+.w-wd:first-child{color:var(--sun);}
+.w-wd:last-child{color:var(--sat);}
+
+/* Widget grid */
+.w-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  padding:4px 8px 12px;
+  gap:2px;
+}
+.w-cell{
+  display:flex;flex-direction:column;align-items:center;
+  padding:3px 2px;border-radius:10px;cursor:pointer;
+  transition:background .12s;touch-action:manipulation;
+  min-height:52px;
+  position:relative;
+}
+.w-cell:active{background:rgba(255,255,255,.06);}
+.w-cell.other{opacity:.3;}
+.w-cell.is-today .w-num{background:var(--today);color:#fff;}
+.w-cell.is-sunday .w-num{color:var(--sun);}
+.w-cell.is-saturday .w-num{color:var(--sat);}
+.w-num{
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;margin-bottom:2px;
+}
+.w-lunar{font-size:8px;color:var(--lunar);line-height:1;margin-bottom:2px;text-align:center;}
+.w-lunar.hol{color:#f87171;font-weight:700;}
+.w-dots{display:flex;gap:2px;justify-content:center;flex-wrap:wrap;}
+.w-dot{width:5px;height:5px;border-radius:50%;}
+.w-dot.bday-dot{background:var(--bday);}
+
+/* Widget upcoming */
+.w-upcoming{padding:0 8px 14px;}
+.w-upcoming-title{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px;margin-bottom:8px;padding:0 4px;}
+.w-evt-row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;background:var(--surface2);margin-bottom:4px;cursor:pointer;touch-action:manipulation;}
+.w-evt-row:active{background:var(--border);}
+.w-evt-bar{width:4px;height:32px;border-radius:2px;flex-shrink:0;}
+.w-evt-info{flex:1;min-width:0;}
+.w-evt-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.w-evt-date{font-size:11px;color:var(--muted);margin-top:1px;}
+.w-no-evt{text-align:center;padding:16px;color:var(--muted);font-size:12px;}
+
+/* Quick-add strip */
+.w-quick{
+  background:var(--surface);border-radius:16px;border:1px solid var(--border);
+  padding:14px 16px;display:flex;align-items:center;gap:12px;
+  cursor:pointer;touch-action:manipulation;transition:background .12s;
+}
+.w-quick:active{background:var(--surface2);}
+.w-quick-icon{width:36px;height:36px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.w-quick-text{flex:1;}
+.w-quick-title{font-size:14px;font-weight:700;}
+.w-quick-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.w-quick-arrow{color:var(--muted);font-size:18px;}
+
+/* Switch to full app */
+.w-switch{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px;border-radius:14px;
+  background:var(--surface);border:1px solid var(--border);
+  cursor:pointer;touch-action:manipulation;font-size:13px;font-weight:600;color:var(--muted);
+}
+.w-switch:active{background:var(--surface2);}
+
+/* ══════════════════════════════════
+   FULL CALENDAR VIEW
+══════════════════════════════════ */
+#calView{background:var(--bg);}
+
+.cal-header{
+  display:flex;align-items:center;gap:8px;
+  padding:calc(var(--safe-top) + 12px) 14px 10px;
+  border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;
+}
+.nav-grp{display:flex;align-items:center;gap:5px;flex:1;min-width:0;}
+.c-title{font-size:16px;font-weight:700;letter-spacing:-.5px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.c-btn{width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;color:var(--text);flex-shrink:0;touch-action:manipulation;}
+.c-btn:active{background:var(--border);}
+.c-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.view-tog{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);}
+.vt-btn{padding:5px 10px;border:none;background:transparent;cursor:pointer;font-size:11px;font-weight:700;color:var(--muted);touch-action:manipulation;}
+.vt-btn.active{background:var(--accent);color:#fff;}
+.c-bday-btn,.c-sync-btn{width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;color:var(--muted);position:relative;touch-action:manipulation;}
+.c-back-btn{width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text);touch-action:manipulation;}
+.sync-dot{width:7px;height:7px;border-radius:50%;position:absolute;top:-2px;right:-2px;background:var(--light);}
+.sync-dot.on{background:var(--green);}
+.sync-dot.spin{background:var(--yellow);animation:pulse .8s infinite;}
+.sync-dot.err{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Calendar grid */
+.cal-body{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.wd-hdr{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;}
+.wd-lbl{padding:7px 0;text-align:center;font-size:10px;font-weight:700;color:var(--muted);}
+.wd-lbl:first-child{color:var(--sun);}
+.wd-lbl:last-child{color:var(--sat);}
+.month-grid{display:grid;grid-template-columns:repeat(7,1fr);flex:1;overflow-y:auto;}
+.d-cell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:5px 3px 3px;cursor:pointer;transition:background .1s;min-height:76px;position:relative;}
+.d-cell:nth-child(7n){border-right:none;}
+.d-cell:active{background:#181818;}
+.d-cell.other{background:#070707;}
+.d-cell.other .d-num,.d-cell.other .d-lunar{color:var(--light);}
+.d-num{font-size:12px;font-weight:700;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;margin-bottom:1px;}
+.d-cell.is-today .d-num{background:var(--today);color:#fff;}
+.d-cell.is-sun .d-num{color:var(--sun);}
+.d-cell.is-sat .d-num{color:var(--sat);}
+.d-lunar{font-size:8px;color:var(--lunar);margin-bottom:2px;min-height:11px;line-height:1.2;}
+.d-lunar.hol{color:#f87171;font-weight:700;}
+.d-evts{display:flex;flex-direction:column;gap:2px;}
+.d-chip{font-size:9px;font-weight:600;padding:1px 4px;border-radius:3px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.d-chip.bday{background:transparent!important;color:var(--bday);}
+.d-more{font-size:8px;color:var(--muted);padding:1px 3px;}
+
+/* Week view */
+.week-wrap{flex:1;overflow-y:auto;}
+.week-cols{display:grid;grid-template-columns:repeat(7,1fr);min-height:100%;}
+.wk-col{border-right:1px solid var(--border);min-height:360px;}
+.wk-col:last-child{border-right:none;}
+.wk-hdr{padding:8px 3px 6px;text-align:center;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:1;}
+.wk-name{font-size:9px;font-weight:700;color:var(--muted);margin-bottom:2px;}
+.wk-num{font-size:16px;font-weight:700;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;margin:0 auto 2px;}
+.wk-col.is-today .wk-num{background:var(--today);color:#fff;}
+.wk-col.is-sun .wk-num{color:var(--sun);}
+.wk-col.is-sat .wk-num{color:var(--sat);}
+.wk-lunar{font-size:8px;color:var(--lunar);}
+.wk-evts{padding:4px 2px;display:flex;flex-direction:column;gap:2px;}
+.wk-chip{font-size:9px;font-weight:600;padding:3px 4px;border-radius:4px;color:#fff;cursor:pointer;word-break:break-all;line-height:1.3;}
+.wk-chip.bday{background:transparent!important;color:var(--bday);}
+
+/* FAB */
+.fab{position:fixed;bottom:calc(var(--safe-bot) + 20px);right:18px;width:50px;height:50px;background:var(--accent);color:#fff;border:none;border-radius:50%;font-size:24px;cursor:pointer;box-shadow:0 4px 18px rgba(74,108,247,.55);z-index:100;display:flex;align-items:center;justify-content:center;touch-action:manipulation;transition:transform .15s;}
+.fab:active{transform:scale(.9);}
+
+/* ══════════════════════════════════
+   OVERLAYS / SHEETS / DIALOGS
+══════════════════════════════════ */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center;z-index:300;backdrop-filter:blur(3px);}
+.overlay.center{align-items:center;}
+.overlay.hidden{display:none;}
+.sheet{background:var(--surface);border-radius:22px 22px 0 0;width:100%;max-width:560px;max-height:93vh;overflow-y:auto;padding-bottom:calc(var(--safe-bot) + 8px);animation:up .22s ease;}
+@keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.s-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 0;}
+.s-body{padding:14px 18px 18px;}
+.s-title{font-size:17px;font-weight:800;margin-bottom:16px;letter-spacing:-.3px;}
+.dialog{background:var(--surface);border-radius:18px;width:calc(100% - 36px);max-width:440px;padding:22px 18px 18px;border:1px solid var(--border);animation:pop .18s ease;}
+@keyframes pop{from{transform:scale(.9);opacity:0}to{transform:scale(1);opacity:1}}
+.d-title{font-size:16px;font-weight:800;margin-bottom:14px;}
+
+/* Form */
+.fg{margin-bottom:12px;}
+.fl{display:block;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;letter-spacing:.4px;}
+.fi{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;color:var(--text);background:var(--surface2);outline:none;transition:border-color .15s;}
+.fi:focus{border-color:var(--accent);}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cp{display:flex;gap:7px;flex-wrap:wrap;}
+.cdot{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:border-color .12s,transform .12s;touch-action:manipulation;}
+.cdot.sel{border-color:#fff;transform:scale(1.15);}
+.tab-row{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;}
+.tab-btn{flex:1;padding:8px;border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;}
+.tab-btn.active{background:var(--accent);color:#fff;}
+.rtog{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.rbtn{flex:1;padding:8px;border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;}
+.rbtn.active{background:var(--surface2);color:var(--text);}
+.sa{display:flex;gap:7px;margin-top:16px;}
+.btn-c{flex:1;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--muted);touch-action:manipulation;}
+.btn-s{flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;touch-action:manipulation;}
+.btn-d{padding:11px 14px;background:rgba(239,68,68,.14);color:var(--red);border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;touch-action:manipulation;}
+.bfull{width:100%;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:7px;touch-action:manipulation;}
+.bfull:active{background:var(--border);}
+.bfull.acc{background:var(--accent);border-color:var(--accent);color:#fff;}
+.epick{display:flex;gap:7px;flex-wrap:wrap;}
+.eopt{font-size:20px;cursor:pointer;padding:4px;border-radius:6px;border:2px solid transparent;touch-action:manipulation;}
+.eopt.sel{border-color:var(--accent);transform:scale(1.2);}
+
+/* Detail */
+.det-bar{height:5px;border-radius:3px;margin-bottom:10px;}
+.det-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.badge{display:inline-flex;align-items:center;gap:3px;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;}
+.badge.bday-b{background:rgba(249,115,22,.15);color:var(--bday);}
+.badge.rep-b{background:rgba(74,108,247,.15);color:var(--accent);}
+.det-title{font-size:17px;font-weight:800;margin-bottom:4px;}
+.det-time{font-size:12px;color:var(--muted);margin-bottom:6px;white-space:pre-line;}
+.det-note{font-size:12px;color:var(--muted);white-space:pre-wrap;margin-bottom:12px;}
+
+/* Birthday list */
+.bl-item{display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;touch-action:manipulation;}
+.bl-item:active{background:var(--border);}
+.bl-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(249,115,22,.15);flex-shrink:0;}
+.bl-info{flex:1;min-width:0;}
+.bl-name{font-size:13px;font-weight:700;}
+.bl-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.bl-next{font-size:10px;color:var(--bday);font-weight:700;text-align:right;flex-shrink:0;}
+
+/* Sync */
+.sync-sec{background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:12px;}
+.sync-lbl{font-size:10px;font-weight:700;color:var(--muted);margin-bottom:7px;letter-spacing:.4px;}
+.sync-code{font-family:'SF Mono','Fira Code',monospace;font-size:22px;font-weight:800;letter-spacing:5px;color:var(--accent);text-align:center;padding:10px;background:var(--accent-bg);border-radius:8px;margin-bottom:7px;user-select:all;}
+.sync-st{font-size:11px;color:var(--muted);text-align:center;}
+.sync-st.ok{color:var(--green);}
+
+/* Toast */
+.toast{position:fixed;bottom:calc(var(--safe-bot) + 80px);left:50%;transform:translateX(-50%) translateY(16px);background:#1e1e1e;color:#fff;padding:9px 18px;border-radius:18px;font-size:12px;font-weight:700;opacity:0;transition:all .28s;z-index:999;white-space:nowrap;pointer-events:none;border:1px solid #333;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* PWA install banner */
+.install-banner{background:var(--accent-bg);border:1px solid rgba(74,108,247,.4);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;}
+.install-banner.hidden{display:none;}
+.ib-icon{width:40px;height:40px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.ib-info{flex:1;}
+.ib-title{font-size:13px;font-weight:700;margin-bottom:2px;}
+.ib-sub{font-size:11px;color:rgba(255,255,255,.6);}
+.ib-close{font-size:18px;color:var(--muted);padding:4px;cursor:pointer;}
+
+/* Divider */
+.div{text-align:center;color:var(--muted);font-size:11px;margin:10px 0;}
+
+/* Empty */
+.empty{text-align:center;padding:32px 16px;color:var(--muted);}
+.empty-e{font-size:36px;margin-bottom:10px;}
+
+@media(min-width:640px){
+  .overlay{align-items:center;}
+  .sheet{border-radius:20px;max-height:86vh;margin:16px;}
+  .d-cell{min-height:100px;}
+  .d-num{font-size:13px;width:26px;height:26px;}
+  .d-lunar{font-size:9px;}
+}
+@media(min-width:900px){
+  .c-title{font-size:18px;}
+  .d-cell{min-height:110px;padding:7px 5px 5px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ WIDGET VIEW ══ -->
+<div class="view active" id="widgetView">
+
+  <!-- PWA Install banner -->
+  <div class="install-banner" id="installBanner">
+    <div class="ib-icon">📅</div>
+    <div class="ib-info">
+      <div class="ib-title">홈화면에 추가하기</div>
+      <div class="ib-sub">iOS: 공유 버튼 → 홈 화면에 추가<br>Android: 메뉴 → 홈 화면에 추가</div>
+    </div>
+    <div class="ib-close" id="installClose">✕</div>
+  </div>
+
+  <!-- Widget card -->
+  <div class="widget-hero">
+    <!-- Header -->
+    <div class="w-header">
+      <div class="w-month-info">
+        <div class="w-month" id="wMonthTitle">2026년 7월</div>
+        <div class="w-lunar-month" id="wLunarMonth">음력 6월</div>
+      </div>
+      <div class="w-nav">
+        <div class="w-today-dot" id="wTodayDot" title="오늘"></div>
+        <button class="w-nav-btn" id="wPrev">‹</button>
+        <button class="w-nav-btn" id="wNext">›</button>
+      </div>
+    </div>
+
+    <!-- Weekdays -->
+    <div class="w-weekdays">
+      <div class="w-wd">일</div><div class="w-wd">월</div><div class="w-wd">화</div>
+      <div class="w-wd">수</div><div class="w-wd">목</div><div class="w-wd">금</div><div class="w-wd">토</div>
+    </div>
+
+    <!-- Grid – clicking a cell opens quick add -->
+    <div class="w-grid" id="wGrid"></div>
+
+    <!-- Upcoming events -->
+    <div class="w-upcoming" id="wUpcoming"></div>
+  </div>
+
+  <!-- Quick add strip -->
+  <div class="w-quick" id="wQuickAdd">
+    <div class="w-quick-icon">✏️</div>
+    <div class="w-quick-text">
+      <div class="w-quick-title">일정 추가</div>
+      <div class="w-quick-sub">탭해서 새 일정 작성</div>
+    </div>
+    <div class="w-quick-arrow">›</div>
+  </div>
+
+  <!-- Open full app -->
+  <div class="w-switch" id="wOpenFull">
+    📅 전체 캘린더 열기 &nbsp;›
+  </div>
+</div>
+
+<!-- ══ FULL CALENDAR VIEW ══ -->
+<div class="view" id="calView">
+  <div class="cal-header">
+    <div class="nav-grp">
+      <button class="c-back-btn" id="cBack">‹</button>
+      <button class="c-btn" id="cPrev">‹</button>
+      <span class="c-title" id="cTitle">...</span>
+      <button class="c-btn" id="cNext">›</button>
+      <button class="c-btn" id="cToday" style="font-size:10px;font-weight:800;">오늘</button>
+    </div>
+    <div class="c-right">
+      <div class="view-tog">
+        <button class="vt-btn active" id="vMonth">월</button>
+        <button class="vt-btn" id="vWeek">주</button>
+      </div>
+      <button class="c-bday-btn" id="cBday">🎂</button>
+      <button class="c-sync-btn" id="cSync">🔗<span class="sync-dot" id="syncDot"></span></button>
+    </div>
+  </div>
+  <div class="cal-body">
+    <div class="wd-hdr">
+      <div class="wd-lbl">일</div><div class="wd-lbl">월</div><div class="wd-lbl">화</div>
+      <div class="wd-lbl">수</div><div class="wd-lbl">목</div><div class="wd-lbl">금</div><div class="wd-lbl">토</div>
+    </div>
+    <div id="calBody" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;"></div>
+  </div>
+  <button class="fab" id="calFab">+</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ══ EVENT MODAL ══ -->
+<div class="overlay hidden" id="evtOverlay">
+  <div class="sheet">
+    <div class="s-handle"></div>
+    <div class="s-body">
+      <div class="tab-row" id="modalTabs">
+        <button class="tab-btn active" id="tabEvt">📅 일정</button>
+        <button class="tab-btn" id="tabBdy">🎂 생일</button>
+      </div>
+      <!-- Event form -->
+      <div id="evtForm">
+        <div class="fg"><label class="fl">제목 *</label><input class="fi" id="eTitle" placeholder="일정 제목" maxlength="60"></div>
+        <div class="fr">
+          <div class="fg"><label class="fl">시작일</label><input class="fi" type="date" id="eStart"></div>
+          <div class="fg"><label class="fl">종료일</label><input class="fi" type="date" id="eEnd"></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label class="fl">시작 시간</label><input class="fi" type="time" id="eStartT"></div>
+          <div class="fg"><label class="fl">종료 시간</label><input class="fi" type="time" id="eEndT"></div>
+        </div>
+        <div class="fg">
+          <label class="fl">반복</label>
+          <select class="fi" id="eRepeat"><option value="none">반복 없음</option><option value="yearly">매년 반복 (양력)</option></select>
+        </div>
+        <div class="fg"><label class="fl">메모</label><textarea class="fi" id="eNote" rows="2" placeholder="메모 (선택사항)" style="resize:vertical"></textarea></div>
+        <div class="fg"><label class="fl">색상</label><div class="cp" id="colorPick"></div></div>
+        <div class="sa" id="evtActs">
+          <button class="btn-c" id="eCan">취소</button>
+          <button class="btn-s" id="eSave">저장</button>
+        </div>
+      </div>
+      <!-- Birthday form -->
+      <div id="bdyForm" style="display:none;">
+        <div class="fg"><label class="fl">이름 *</label><input class="fi" id="bName" placeholder="이름" maxlength="30"></div>
+        <div class="fg"><label class="fl">생일 기준</label>
+          <div class="rtog"><button class="rbtn active" id="bSolarBtn">☀️ 양력</button><button class="rbtn" id="bLunarBtn">🌙 음력</button></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label class="fl">월</label>
+            <select class="fi" id="bMonth"><option value="">월</option>
+              <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option><option value="4">4월</option>
+              <option value="5">5월</option><option value="6">6월</option><option value="7">7월</option><option value="8">8월</option>
+              <option value="9">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+            </select>
+          </div>
+          <div class="fg"><label class="fl">일</label><select class="fi" id="bDay"><option value="">일</option></select></div>
+        </div>
+        <div class="fg"><label class="fl">출생 연도 (선택 – 나이 표시)</label><input class="fi" id="bYear" type="number" placeholder="예: 1990" min="1900" max="2099"></div>
+        <div class="fg"><label class="fl">이모지</label>
+          <div class="epick" id="epick">
+            <span class="eopt" data-e="🎂">🎂</span><span class="eopt" data-e="🎁">🎁</span><span class="eopt" data-e="🌸">🌸</span>
+            <span class="eopt" data-e="🎈">🎈</span><span class="eopt" data-e="⭐">⭐</span><span class="eopt" data-e="💝">💝</span>
+            <span class="eopt" data-e="🐶">🐶</span><span class="eopt" data-e="😊">😊</span><span class="eopt" data-e="👑">👑</span><span class="eopt" data-e="🌟">🌟</span>
+          </div>
+        </div>
+        <div class="fg"><label class="fl">메모</label><input class="fi" id="bNote" placeholder="메모 (선택사항)" maxlength="80"></div>
+        <div class="sa" id="bdyActs">
+          <button class="btn-c" id="bCan">취소</button>
+          <button class="btn-s" id="bSave">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DETAIL SHEET ══ -->
+<div class="overlay hidden" id="detOverlay">
+  <div class="sheet">
+    <div class="s-handle"></div>
+    <div class="s-body">
+      <div class="det-bar" id="detBar"></div>
+      <div class="det-badges" id="detBadges"></div>
+      <div class="det-title" id="detTitle"></div>
+      <div class="det-time" id="detTime"></div>
+      <div class="det-note" id="detNote"></div>
+      <div class="sa">
+        <button class="btn-c" id="detClose">닫기</button>
+        <button class="btn-s" id="detEdit">수정</button>
+        <button class="btn-d" id="detDel">삭제</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BIRTHDAY LIST ══ -->
+<div class="overlay center hidden" id="blOverlay">
+  <div class="dialog">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div class="d-title" style="margin:0;">🎂 생일 관리</div>
+      <button class="c-btn" id="blClose" style="font-size:16px;">✕</button>
+    </div>
+    <div id="blContent"></div>
+    <button class="bfull acc" id="blAdd" style="margin-top:10px;margin-bottom:0;">+ 생일 추가</button>
+  </div>
+</div>
+
+<!-- ══ SYNC PANEL ══ -->
+<div class="overlay center hidden" id="syncOverlay">
+  <div class="dialog">
+    <div class="d-title">🔗 기기 연동</div>
+    <div class="sync-sec">
+      <div class="sync-lbl">내 공유 코드</div>
+      <div class="sync-code" id="myCode">------</div>
+      <div class="sync-st" id="syncSt">코드를 생성하면 다른 기기에서 연결할 수 있어요</div>
+    </div>
+    <button class="bfull acc" id="btnCreate">새 공유 코드 생성</button>
+    <button class="bfull" id="btnCopy">코드 복사 📋</button>
+    <div class="div">— 또는 —</div>
+    <div class="sync-sec">
+      <div class="sync-lbl">다른 기기 코드 입력</div>
+      <input class="fi" id="joinInput" placeholder="6자리 코드" maxlength="6" style="text-align:center;font-size:18px;letter-spacing:5px;font-weight:800;text-transform:uppercase;margin-bottom:8px;">
+      <button class="bfull" id="btnJoin">연결하기</button>
+    </div>
+    <div style="display:flex;gap:7px;margin-top:4px;">
+      <button class="btn-c" id="syncClose" style="flex:1;">닫기</button>
+      <button class="bfull" id="btnDisc" style="flex:1;color:var(--red);border-color:rgba(239,68,68,.3);margin:0;">연동 해제</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════
+// SERVICE WORKER
+// ════════════════════════════════
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+// ════════════════════════════════
+// LUNAR ENGINE
+// ════════════════════════════════
+function getLunarLengths(){
+  const d={};
+  for(let y=1990;y<=2040;y++) for(let m=1;m<=12;m++) d[`${y}-${m}`]=((y*13+m*7+3)%100<53)?29:30;
+  Object.assign(d,{
+    '2024-1':30,'2024-2':29,'2024-3':30,'2024-4':29,'2024-5':29,'2024-6':30,'2024-7':29,'2024-8':30,'2024-9':30,'2024-10':29,'2024-11':30,'2024-12':30,
+    '2025-1':29,'2025-2':30,'2025-3':29,'2025-4':30,'2025-5':29,'2025-6':29,'2025-7':30,'2025-8':29,'2025-9':30,'2025-10':29,'2025-11':30,'2025-12':29,
+    '2026-1':30,'2026-2':29,'2026-3':30,'2026-4':30,'2026-5':29,'2026-6':30,'2026-7':29,'2026-8':30,'2026-9':29,'2026-10':29,'2026-11':30,'2026-12':29,
+    '2027-1':30,'2027-2':30,'2027-3':29,'2027-4':30,'2027-5':29,'2027-6':30,'2027-7':29,'2027-8':29,'2027-9':30,'2027-10':29,'2027-11':30,'2027-12':30,
+    '2028-1':29,'2028-2':30,'2028-3':29,'2028-4':30,'2028-5':29,'2028-6':30,'2028-7':30,'2028-8':29,'2028-9':30,'2028-10':29,'2028-11':30,'2028-12':29,
+    '2029-1':30,'2029-2':29,'2029-3':30,'2029-4':29,'2029-5':30,'2029-6':29,'2029-7':30,'2029-8':30,'2029-9':29,'2029-10':30,'2029-11':29,'2029-12':30,
+    '2030-1':29,'2030-2':30,'2030-3':29,'2030-4':30,'2030-5':29,'2030-6':29,'2030-7':30,'2030-8':29,'2030-9':30,'2030-10':30,'2030-11':29,'2030-12':30,
+  });
+  return d;
+}
+const LL=getLunarLengths();
+function toJD(y,m,d){return 367*y-Math.floor(7*(y+Math.floor((m+9)/12))/4)+Math.floor(275*m/9)+d+1721013.5;}
+function s2l(sy,sm,sd){
+  const diff=Math.round(toJD(sy,sm,sd)-toJD(2000,1,1));
+  let ly=1999,lm=11,ld=25,rem=diff;
+  if(rem>=0){while(rem>0){const len=LL[`${ly}-${lm}`]||30,left=len-ld;if(rem<=left){ld+=rem;rem=0;}else{rem-=(left+1);ld=1;lm++;if(lm>12){lm=1;ly++;}}}}
+  else{while(rem<0){ld+=rem;if(ld<1){lm--;if(lm<1){lm=12;ly--;}ld+=(LL[`${ly}-${lm}`]||30)+ld;rem=0;}else rem=0;}}
+  return{year:ly,month:lm,day:ld};
+}
+function isLeap(y){return(y%4===0&&y%100!==0)||y%400===0;}
+function l2s(lm,ld,sy){
+  for(let m=1;m<=12;m++){
+    const dm=[31,isLeap(sy)?29:28,31,30,31,30,31,31,30,31,30,31][m-1];
+    for(let d=1;d<=dm;d++){try{const l=s2l(sy,m,d);if(l.month===lm&&l.day===ld)return{y:sy,m,d};}catch(e){}}
+  }
+  for(let m=1;m<=3;m++){const ny=sy+1;const dm=[31,isLeap(ny)?29:28,31,30,31,30,31,31,30,31,30,31][m-1];for(let d=1;d<=dm;d++){try{const l=s2l(ny,m,d);if(l.month===lm&&l.day===ld)return{y:ny,m,d};}catch(e){}}}
+  return null;
+}
+const LH={'1-1':'설날','1-15':'정월대보름','4-8':'부처님오신날','5-5':'단오','7-7':'칠석','8-15':'추석','12-30':'그믐'};
+function lunarStr(sy,sm,sd){
+  try{const l=s2l(sy,sm,sd);const h=LH[`${l.month}-${l.day}`]||'';return{t:`음 ${l.month}/${l.day}${h?' '+h:''}`,h:!!h,lm:l.month};}
+  catch(e){return{t:'',h:false,lm:0};}
+}
+
+// ════════════════════════════════
+// STATE
+// ════════════════════════════════
+const COLORS=['#4a6cf7','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#64748b'];
+let events    = JSON.parse(localStorage.getItem('cal_events')||'[]');
+let birthdays = JSON.parse(localStorage.getItem('cal_bdays')||'[]');
+let curDate   = new Date();
+let calView_  = 'month';
+let wDate     = new Date(); // widget month
+let editEvtId = null, editBdId = null;
+let bdType    = 'solar', selEmoji = '🎂';
+let syncCode  = localStorage.getItem('cal_syncCode')||null;
+let syncBinId = localStorage.getItem('cal_syncBinId')||null;
+let syncIv    = null, syncing = false, lastHash = null;
+const today   = new Date(); today.setHours(0,0,0,0);
+const JBAPI   = 'https://api.jsonbin.io/v3';
+
+function ds(y,m,d){return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+function pd(s){const[y,m,d]=s.split('-').map(Number);return{y,m,d};}
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
+function saveAll(upd=true){
+  localStorage.setItem('cal_events',JSON.stringify(events));
+  localStorage.setItem('cal_bdays',JSON.stringify(birthdays));
+  if(upd)localStorage.setItem('cal_lw',Date.now());
+}
+function saveAndSync(){saveAll();if(syncBinId)syncNow();}
+
+// ════════════════════════════════
+// BIRTHDAY HELPERS
+// ════════════════════════════════
+function bdaysForDay(dateStr){
+  const{y,m,d}=pd(dateStr);
+  return birthdays.filter(b=>{
+    if(b.type==='solar')return b.month===m&&b.day===d;
+    try{const l=s2l(y,m,d);return l.month===b.month&&l.day===b.day;}catch(e){return false;}
+  });
+}
+function nextBday(b){
+  const now=new Date();now.setHours(0,0,0,0);
+  for(let i=0;i<=366;i++){
+    const c=new Date(now);c.setDate(c.getDate()+i);
+    const cy=c.getFullYear(),cm=c.getMonth()+1,cd=c.getDate();
+    if(b.type==='solar'){if(b.month===cm&&b.day===cd)return c;}
+    else{try{const l=s2l(cy,cm,cd);if(l.month===b.month&&l.day===b.day)return c;}catch(e){}}
+  }
+  return null;
+}
+function dUntil(dt){
+  if(!dt)return '';
+  const now=new Date();now.setHours(0,0,0,0);
+  const diff=Math.round((dt-now)/(864e5));
+  if(diff===0)return '오늘! 🎉';if(diff===1)return '내일';return `${diff}일 후`;
+}
+function bdAge(b,y){return b.year?(y-b.year):null;}
+function bdDesc(b){return `${b.type==='lunar'?'🌙 음력':'☀️ 양력'} ${b.month}월 ${b.day}일 생일`;}
+
+// ════════════════════════════════
+// EVENTS HELPERS
+// ════════════════════════════════
+function evtsForDay(dateStr){
+  const{y,m,d}=pd(dateStr);
+  return events.filter(e=>{
+    if(e.repeat==='yearly'){const es=pd(e.start);return es.m===m&&es.d===d;}
+    return(!e.end||e.end===e.start)?e.start===dateStr:(e.start<=dateStr&&dateStr<=e.end);
+  }).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
+}
+
+// ════════════════════════════════
+// WIDGET VIEW RENDER
+// ════════════════════════════════
+function renderWidget(){
+  const y=wDate.getFullYear(),m=wDate.getMonth();
+  const lInfo=lunarStr(y,m+1,1);
+  document.getElementById('wMonthTitle').textContent=`${y}년 ${m+1}월`;
+  document.getElementById('wLunarMonth').textContent=`음력 ${lInfo.lm}월`;
+
+  const first=new Date(y,m,1),last=new Date(y,m+1,0);
+  const startDow=first.getDay();
+  const prevLast=new Date(y,m,0);
+  const grid=document.getElementById('wGrid');
+  grid.innerHTML='';
+
+  // prev padding
+  for(let i=startDow-1;i>=0;i--){
+    const day=prevLast.getDate()-i;
+    const pm=m===0?12:m,py=m===0?y-1:y;
+    grid.appendChild(wCell(ds(py,pm,day),day,true,py,pm,day));
+  }
+  // current month
+  for(let day=1;day<=last.getDate();day++){
+    grid.appendChild(wCell(ds(y,m+1,day),day,false,y,m+1,day));
+  }
+  // next padding
+  const pad=(startDow+last.getDate())%7;
+  if(pad){const nm=m+2>12?1:m+2,ny=m+2>12?y+1:y;for(let day=1;day<=7-pad;day++) grid.appendChild(wCell(ds(ny,nm,day),day,true,ny,nm,day));}
+
+  renderWidgetUpcoming(y,m);
+}
+
+function wCell(dateStr,dayNum,other,y,m,d){
+  const div=document.createElement('div');
+  div.className='w-cell';
+  const dt=new Date(y,m-1,d),dow=dt.getDay();
+  const isToday_=dt.getTime()===today.getTime();
+  if(other)div.classList.add('other');
+  if(isToday_)div.classList.add('is-today');
+  if(dow===0)div.classList.add('is-sunday');
+  if(dow===6)div.classList.add('is-saturday');
+
+  const{t:lt,h:lh}=lunarStr(y,m,d);
+  const bds=bdaysForDay(dateStr);
+  const evts=evtsForDay(dateStr);
+
+  // Number
+  const numEl=document.createElement('div');numEl.className='w-num';numEl.textContent=dayNum;div.appendChild(numEl);
+  // Lunar
+  const lEl=document.createElement('div');lEl.className='w-lunar'+(lh?' hol':'');
+  lEl.textContent=lt.replace('음 ','');div.appendChild(lEl);
+  // Dots
+  if(bds.length||evts.length){
+    const dotWrap=document.createElement('div');dotWrap.className='w-dots';
+    bds.forEach(()=>{const d2=document.createElement('div');d2.className='w-dot bday-dot';dotWrap.appendChild(d2);});
+    evts.slice(0,3).forEach(e=>{const d2=document.createElement('div');d2.className='w-dot';d2.style.background=e.color||COLORS[0];dotWrap.appendChild(d2);});
+    div.appendChild(dotWrap);
+  }
+
+  // Click → open quick add modal pre-filled with this date
+  div.addEventListener('click',()=>{
+    openEvtModal(null, dateStr);
+    showView('evtOverlay'); // handled inside openEvtModal
+  });
+  return div;
+}
+
+function renderWidgetUpcoming(y,m){
+  const wrap=document.getElementById('wUpcoming');
+  const rows=[];
+  // Gather events+birthdays for next 7 days from today
+  const base=new Date(today);
+  for(let i=0;i<14;i++){
+    const c=new Date(base);c.setDate(c.getDate()+i);
+    const cy=c.getFullYear(),cm=c.getMonth()+1,cd=c.getDate(),dateStr=ds(cy,cm,cd);
+    evtsForDay(dateStr).forEach(e=>rows.push({type:'evt',e,date:c,dateStr}));
+    bdaysForDay(dateStr).forEach(b=>rows.push({type:'bday',b,date:c,dateStr}));
+  }
+  rows.sort((a,b)=>a.date-b.date);
+  const top=rows.slice(0,4);
+  if(!top.length){wrap.innerHTML=`<div class="w-upcoming-title">다가오는 일정</div><div class="w-no-evt">이번 2주간 일정이 없어요</div>`;return;}
+  let html=`<div class="w-upcoming-title">다가오는 일정</div>`;
+  top.forEach(r=>{
+    if(r.type==='evt'){
+      const{y,m,d}=pd(r.dateStr);
+      const timeStr=r.e.startTime?` · ${r.e.startTime}`:'';
+      const diff=Math.round((r.date-today)/864e5);
+      const when=diff===0?'오늘':diff===1?'내일':`${m}/${d}`;
+      html+=`<div class="w-evt-row" data-evtid="${r.e.id}"><div class="w-evt-bar" style="background:${r.e.color||COLORS[0]}"></div><div class="w-evt-info"><div class="w-evt-title">${r.e.title}</div><div class="w-evt-date">${when}${timeStr}</div></div></div>`;
+    } else {
+      const{y:ry}=pd(r.dateStr);const age=bdAge(r.b,ry);const ageStr=age?` · ${age}세`:'';
+      const diff=Math.round((r.date-today)/864e5);const when=diff===0?'오늘 🎉':diff===1?'내일':`${r.date.getMonth()+1}/${r.date.getDate()}`;
+      html+=`<div class="w-evt-row" data-bdid="${r.b.id}"><div class="w-evt-bar" style="background:#f97316"></div><div class="w-evt-info"><div class="w-evt-title">${r.b.emoji||'🎂'} ${r.b.name}${ageStr}</div><div class="w-evt-date">${when}</div></div></div>`;
+    }
+  });
+  wrap.innerHTML=html;
+  wrap.querySelectorAll('[data-evtid]').forEach(el=>el.addEventListener('click',()=>openDetail(el.dataset.evtid)));
+  wrap.querySelectorAll('[data-bdid]').forEach(el=>el.addEventListener('click',()=>openBdDetail(el.dataset.bdid)));
+}
+
+// ════════════════════════════════
+// FULL CALENDAR RENDER
+// ════════════════════════════════
+function renderCal(){
+  if(calView_==='month')renderMonth();else renderWeek();
+  updateCalTitle();
+}
+function updateCalTitle(){
+  const y=curDate.getFullYear(),m=curDate.getMonth()+1;
+  if(calView_==='month'){
+    const l=s2l(y,m,1);
+    document.getElementById('cTitle').textContent=`${y}년 ${m}월 (음 ${l.month}월)`;
+  } else {
+    const d=new Date(curDate);d.setDate(d.getDate()-d.getDay());
+    const e=new Date(d);e.setDate(e.getDate()+6);
+    document.getElementById('cTitle').textContent=`${d.getMonth()+1}/${d.getDate()} – ${e.getMonth()+1}/${e.getDate()}`;
+  }
+}
+function renderMonth(){
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  const first=new Date(y,m,1),last=new Date(y,m+1,0),startDow=first.getDay();
+  const prevLast=new Date(y,m,0);
+  let html='<div class="month-grid">';
+  for(let i=startDow-1;i>=0;i--){const day=prevLast.getDate()-i,pm=m===0?12:m,py=m===0?y-1:y;html+=dCell(ds(py,pm,day),day,true,py,pm,day);}
+  for(let day=1;day<=last.getDate();day++) html+=dCell(ds(y,m+1,day),day,false,y,m+1,day);
+  const pad=(startDow+last.getDate())%7;
+  if(pad){const nm=m+2>12?1:m+2,ny=m+2>12?y+1:y;for(let day=1;day<=7-pad;day++) html+=dCell(ds(ny,nm,day),day,true,ny,nm,day);}
+  html+='</div>';
+  document.getElementById('calBody').innerHTML=html;
+  bindCalCells();
+}
+function dCell(dateStr,dayNum,other,y,m,d){
+  const dt=new Date(y,m-1,d),dow=dt.getDay(),isToday_=dt.getTime()===today.getTime();
+  const{t:lt,h:lh}=lunarStr(y,m,d);
+  const evts=evtsForDay(dateStr),bds=bdaysForDay(dateStr);
+  let cls='d-cell'+(other?' other':'')+(isToday_?' is-today':'')+(dow===0?' is-sun':dow===6?' is-sat':'');
+  const mx=2;
+  let eHtml='<div class="d-evts">';
+  bds.forEach(b=>{const age=bdAge(b,y);const ageStr=age?` (${age})`:'';eHtml+=`<div class="d-chip bday" data-bdid="${b.id}">${b.emoji||'🎂'}${b.name}${ageStr}</div>`;});
+  const rem=Math.max(0,mx-bds.length);
+  evts.slice(0,rem).forEach(e=>{eHtml+=`<div class="d-chip" style="background:${e.color||COLORS[0]}" data-evtid="${e.id}">${e.repeat==='yearly'?'🔁':''}${e.title}</div>`;});
+  const more=bds.length+evts.length-mx;
+  if(more>0)eHtml+=`<div class="d-more">+${more}</div>`;
+  eHtml+='</div>';
+  return `<div class="${cls}" data-date="${dateStr}"><div class="d-num">${dayNum}</div><div class="d-lunar${lh?' hol':''}">${lt}</div>${eHtml}</div>`;
+}
+function renderWeek(){
+  const base=new Date(curDate);base.setDate(base.getDate()-base.getDay());
+  const DAYS=['일','월','화','수','목','금','토'];
+  let html='<div class="week-wrap"><div class="week-cols">';
+  for(let i=0;i<7;i++){
+    const c=new Date(base);c.setDate(c.getDate()+i);
+    const y=c.getFullYear(),m=c.getMonth()+1,d=c.getDate(),dateStr=ds(y,m,d);
+    const isToday_=c.getTime()===today.getTime();
+    const{t:lt,h:lh}=lunarStr(y,m,d);
+    let cls='wk-col'+(isToday_?' is-today':'')+(i===0?' is-sun':i===6?' is-sat':'');
+    const evts=evtsForDay(dateStr),bds=bdaysForDay(dateStr);
+    let eHtml='<div class="wk-evts">';
+    bds.forEach(b=>{const age=bdAge(b,y);const ageStr=age?` (${age}세)`:'';eHtml+=`<div class="wk-chip bday" data-bdid="${b.id}">${b.emoji||'🎂'} ${b.name}${ageStr}</div>`;});
+    evts.forEach(e=>{const t=e.startTime?`${e.startTime} `:'';eHtml+=`<div class="wk-chip" style="background:${e.color||COLORS[0]}" data-evtid="${e.id}">${t}${e.title}</div>`;});
+    eHtml+='</div>';
+    html+=`<div class="${cls}" data-date="${dateStr}"><div class="wk-hdr"><div class="wk-name">${DAYS[i]}</div><div class="wk-num">${d}</div><div class="wk-lunar${lh?' hol':''}">${lt}</div></div>${eHtml}</div>`;
+  }
+  html+='</div></div>';
+  document.getElementById('calBody').innerHTML=html;
+  bindCalCells();
+}
+function bindCalCells(){
+  document.querySelectorAll('[data-date]').forEach(cell=>{
+    cell.addEventListener('click',function(e){if(e.target.closest('[data-evtid],[data-bdid]'))return;openEvtModal(null,this.dataset.date);});
+  });
+  document.querySelectorAll('[data-evtid]').forEach(el=>el.addEventListener('click',function(e){e.stopPropagation();openDetail(this.dataset.evtid);}));
+  document.querySelectorAll('[data-bdid]').forEach(el=>el.addEventListener('click',function(e){e.stopPropagation();openBdDetail(this.dataset.bdid);}));
+}
+
+// ════════════════════════════════
+// VIEW SWITCHING
+// ════════════════════════════════
+function showView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ════════════════════════════════
+// EVENT MODAL
+// ════════════════════════════════
+let activeTab='evt';
+function switchTab(t){
+  activeTab=t;
+  document.getElementById('evtForm').style.display=t==='evt'?'block':'none';
+  document.getElementById('bdyForm').style.display=t==='bdy'?'block':'none';
+  document.getElementById('tabEvt').classList.toggle('active',t==='evt');
+  document.getElementById('tabBdy').classList.toggle('active',t==='bdy');
+}
+function buildCP(sel){
+  const el=document.getElementById('colorPick');
+  el.innerHTML=COLORS.map(c=>`<div class="cdot${c===sel?' sel':''}" style="background:${c}" data-c="${c}"></div>`).join('');
+  el.querySelectorAll('.cdot').forEach(dot=>dot.addEventListener('click',function(){el.querySelectorAll('.cdot').forEach(d=>d.classList.remove('sel'));this.classList.add('sel');}));
+}
+function getSC(){const s=document.querySelector('.cdot.sel');return s?s.dataset.c:COLORS[0];}
+function buildEP(sel){
+  selEmoji=sel||'🎂';
+  document.querySelectorAll('.eopt').forEach(e=>{
+    e.classList.toggle('sel',e.dataset.e===selEmoji);
+    e.onclick=function(){selEmoji=this.dataset.e;document.querySelectorAll('.eopt').forEach(x=>x.classList.remove('sel'));this.classList.add('sel');};
+  });
+}
+function updateBDays(){
+  const m=parseInt(document.getElementById('bMonth').value)||0;
+  const sel=document.getElementById('bDay');const prev=sel.value;
+  const mx=m?[31,29,31,30,31,30,31,31,30,31,30,31][m-1]:31;
+  let opts='<option value="">일</option>';
+  for(let d=1;d<=mx;d++) opts+=`<option value="${d}"${parseInt(prev)===d?' selected':''}>${d}일</option>`;
+  sel.innerHTML=opts;
+}
+function setBdType(t){bdType=t;document.getElementById('bSolarBtn').classList.toggle('active',t==='solar');document.getElementById('bLunarBtn').classList.toggle('active',t==='lunar');}
+
+function openEvtModal(id, defaultDate, forceTab){
+  editEvtId=null;editBdId=null;
+  document.getElementById('modalTabs').style.display=id?'none':'flex';
+  if(id&&String(id).startsWith('bd-')){openBdEdit(id.replace('bd-',''));return;}
+  const tab=forceTab||'evt';
+  switchTab(tab);
+  if(id){
+    const e=events.find(x=>x.id===id);if(!e)return;
+    editEvtId=id;
+    document.getElementById('eTitle').value=e.title;
+    document.getElementById('eStart').value=e.start;
+    document.getElementById('eEnd').value=e.end||e.start;
+    document.getElementById('eStartT').value=e.startTime||'';
+    document.getElementById('eEndT').value=e.endTime||'';
+    document.getElementById('eRepeat').value=e.repeat||'none';
+    document.getElementById('eNote').value=e.note||'';
+    buildCP(e.color||COLORS[0]);
+    document.getElementById('evtActs').innerHTML=`<button class="btn-d" id="eDel">삭제</button><button class="btn-c" id="eCan">취소</button><button class="btn-s" id="eSave">저장</button>`;
+    document.getElementById('eDel').onclick=()=>{events=events.filter(x=>x.id!==id);saveAndSync();closeEvtModal();renderCal();renderWidget();};
+  } else {
+    document.getElementById('eTitle').value='';
+    document.getElementById('eStart').value=defaultDate||'';
+    document.getElementById('eEnd').value=defaultDate||'';
+    document.getElementById('eStartT').value='';
+    document.getElementById('eEndT').value='';
+    document.getElementById('eRepeat').value='none';
+    document.getElementById('eNote').value='';
+    buildCP(COLORS[0]);
+    document.getElementById('evtActs').innerHTML=`<button class="btn-c" id="eCan">취소</button><button class="btn-s" id="eSave">저장</button>`;
+    document.getElementById('bName').value='';document.getElementById('bMonth').value='';
+    updateBDays();document.getElementById('bDay').value='';document.getElementById('bYear').value='';document.getElementById('bNote').value='';
+    setBdType('solar');buildEP('🎂');
+    document.getElementById('bdyActs').innerHTML=`<button class="btn-c" id="bCan">취소</button><button class="btn-s" id="bSave">저장</button>`;
+  }
+  document.getElementById('eCan').onclick=closeEvtModal;
+  document.getElementById('eSave').onclick=saveEvt;
+  document.getElementById('bCan').onclick=closeEvtModal;
+  document.getElementById('bSave').onclick=saveBd;
+  document.getElementById('evtOverlay').classList.remove('hidden');
+  if(tab==='evt') setTimeout(()=>document.getElementById('eTitle').focus(),120);
+}
+function closeEvtModal(){document.getElementById('evtOverlay').classList.add('hidden');editEvtId=null;editBdId=null;}
+function saveEvt(){
+  const title=document.getElementById('eTitle').value.trim();
+  if(!title){document.getElementById('eTitle').focus();return;}
+  const start=document.getElementById('eStart').value,end=document.getElementById('eEnd').value||start;
+  const startTime=document.getElementById('eStartT').value,endTime=document.getElementById('eEndT').value;
+  const repeat=document.getElementById('eRepeat').value,note=document.getElementById('eNote').value.trim(),color=getSC();
+  if(editEvtId){const i=events.findIndex(e=>e.id===editEvtId);if(i>=0)events[i]={...events[i],title,start,end,startTime,endTime,repeat,note,color};}
+  else events.push({id:genId(),title,start,end,startTime,endTime,repeat,note,color});
+  saveAndSync();closeEvtModal();renderCal();renderWidget();
+}
+
+// ════════════════════════════════
+// BIRTHDAY MODAL
+// ════════════════════════════════
+function openBdEdit(bdId){
+  const b=birthdays.find(x=>x.id===bdId);if(!b)return;
+  editBdId=bdId;editEvtId=null;
+  closeBlPanel();switchTab('bdy');
+  document.getElementById('modalTabs').style.display='none';
+  document.getElementById('bName').value=b.name;setBdType(b.type||'solar');
+  document.getElementById('bMonth').value=b.month;updateBDays();document.getElementById('bDay').value=b.day;
+  document.getElementById('bYear').value=b.year||'';document.getElementById('bNote').value=b.note||'';
+  buildEP(b.emoji||'🎂');
+  document.getElementById('bdyActs').innerHTML=`<button class="btn-d" id="bDel">삭제</button><button class="btn-c" id="bCan">취소</button><button class="btn-s" id="bSave">저장</button>`;
+  document.getElementById('bDel').onclick=()=>{birthdays=birthdays.filter(x=>x.id!==bdId);saveAndSync();closeEvtModal();renderCal();renderWidget();};
+  document.getElementById('bCan').onclick=closeEvtModal;
+  document.getElementById('bSave').onclick=saveBd;
+  document.getElementById('evtOverlay').classList.remove('hidden');
+}
+function saveBd(){
+  const name=document.getElementById('bName').value.trim();
+  const month=parseInt(document.getElementById('bMonth').value);
+  const day=parseInt(document.getElementById('bDay').value);
+  const year=parseInt(document.getElementById('bYear').value)||null;
+  const note=document.getElementById('bNote').value.trim();
+  if(!name){document.getElementById('bName').focus();showToast('이름을 입력하세요');return;}
+  if(!month||!day){showToast('날짜를 선택하세요');return;}
+  const b={id:editBdId||genId(),name,type:bdType,month,day,year,emoji:selEmoji,note};
+  if(editBdId){const i=birthdays.findIndex(x=>x.id===editBdId);if(i>=0)birthdays[i]=b;}
+  else birthdays.push(b);
+  saveAndSync();closeEvtModal();renderCal();renderWidget();showToast(`🎂 ${name} 생일 저장!`);
+}
+
+// ════════════════════════════════
+// DETAIL SHEET
+// ════════════════════════════════
+function openDetail(id){
+  const e=events.find(x=>x.id===id);if(!e)return;
+  document.getElementById('detBar').style.background=e.color||COLORS[0];
+  const bd=document.getElementById('detBadges');
+  bd.innerHTML=e.repeat==='yearly'?'<span class="badge rep-b">🔁 매년 반복</span>':'';
+  document.getElementById('detTitle').textContent=e.title;
+  let t='';if(e.start){const{y,m,d}=pd(e.start);t=`${y}년 ${m}월 ${d}일`;if(e.end&&e.end!==e.start){const{y:y2,m:m2,d:d2}=pd(e.end);t+=` ~ ${y2}년 ${m2}월 ${d2}일`;}if(e.startTime)t+=` ${e.startTime}`;if(e.endTime)t+=`~${e.endTime}`;}
+  document.getElementById('detTime').textContent=t;
+  const ne=document.getElementById('detNote');ne.textContent=e.note||'';ne.style.display=e.note?'block':'none';
+  document.getElementById('detEdit').onclick=()=>{closeDet();openEvtModal(id);};
+  document.getElementById('detDel').onclick=()=>{events=events.filter(x=>x.id!==id);saveAndSync();closeDet();renderCal();renderWidget();};
+  document.getElementById('detClose').onclick=closeDet;
+  document.getElementById('detOverlay').classList.remove('hidden');
+}
+function openBdDetail(bdId){
+  const b=birthdays.find(x=>x.id===bdId);if(!b)return;
+  document.getElementById('detBar').style.background='#f97316';
+  document.getElementById('detBadges').innerHTML=`<span class="badge bday-b">🎂 생일</span><span class="badge rep-b">${b.type==='lunar'?'🌙 음력':'☀️ 양력'} · 매년</span>`;
+  document.getElementById('detTitle').textContent=`${b.emoji||'🎂'} ${b.name}`;
+  const now=new Date(),age=bdAge(b,now.getFullYear()),next=nextBday(b);
+  let t=bdDesc(b);if(age)t+=` · 올해 ${age}세`;if(next)t+=`\n다음 생일: ${dUntil(next)}`;
+  document.getElementById('detTime').textContent=t;
+  const ne=document.getElementById('detNote');ne.textContent='';ne.style.display='none';
+  document.getElementById('detEdit').onclick=()=>{closeDet();openBdEdit(bdId);};
+  document.getElementById('detDel').onclick=()=>{birthdays=birthdays.filter(x=>x.id!==bdId);saveAndSync();closeDet();renderCal();renderWidget();};
+  document.getElementById('detClose').onclick=closeDet;
+  document.getElementById('detOverlay').classList.remove('hidden');
+}
+function closeDet(){document.getElementById('detOverlay').classList.add('hidden');}
+
+// ════════════════════════════════
+// BIRTHDAY LIST PANEL
+// ════════════════════════════════
+function openBlPanel(){
+  const el=document.getElementById('blContent');
+  if(!birthdays.length){el.innerHTML=`<div class="empty"><div class="empty-e">🎂</div><p>등록된 생일이 없어요</p></div>`;document.getElementById('blOverlay').classList.remove('hidden');return;}
+  const sorted=[...birthdays].sort((a,b)=>{const da=nextBday(a),db=nextBday(b);if(!da)return 1;if(!db)return -1;return da-db;});
+  el.innerHTML=sorted.map(b=>{
+    const next=nextBday(b),age=bdAge(b,new Date().getFullYear());
+    const ageStr=age?` · ${age}세`:'';
+    return `<div class="bl-item" data-bdid="${b.id}"><div class="bl-av">${b.emoji||'🎂'}</div><div class="bl-info"><div class="bl-name">${b.name}</div><div class="bl-sub">${bdDesc(b)}${ageStr}</div></div><div class="bl-next">${dUntil(next)}</div></div>`;
+  }).join('');
+  document.querySelectorAll('.bl-item').forEach(el=>el.addEventListener('click',function(){openBdEdit(this.dataset.bdid);}));
+  document.getElementById('blOverlay').classList.remove('hidden');
+}
+function closeBlPanel(){document.getElementById('blOverlay').classList.add('hidden');}
+
+// ════════════════════════════════
+// SYNC
+// ════════════════════════════════
+function setSyncDot(s){const d=document.getElementById('syncDot');d.className='sync-dot';if(s==='on')d.classList.add('on');else if(s==='spin')d.classList.add('spin');else if(s==='err')d.classList.add('err');}
+function genCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>c[Math.floor(Math.random()*c.length)]).join('');}
+async function createBin(){
+  const code=genCode();
+  try{
+    const r=await fetch(`${JBAPI}/b`,{method:'POST',headers:{'Content-Type':'application/json','X-Bin-Name':`cal-${code}`,'X-Bin-Private':'false'},body:JSON.stringify({code,events,birthdays,updated:Date.now()})});
+    if(!r.ok)throw 0;
+    const d=await r.json();syncCode=code;syncBinId=d.metadata.id;
+    localStorage.setItem('cal_syncCode',code);localStorage.setItem('cal_syncBinId',d.metadata.id);
+    document.getElementById('myCode').textContent=code;document.getElementById('syncSt').textContent='✅ 연동 준비 완료';document.getElementById('syncSt').className='sync-st ok';
+    setSyncDot('on');startSyncPoll();return true;
+  }catch(e){showToast('코드 생성 실패');return false;}
+}
+async function readBin(id){try{const r=await fetch(`${JBAPI}/b/${id}/latest`);if(!r.ok)return null;const d=await r.json();return d.record;}catch(e){return null;}}
+async function writeBin(id,data){try{const r=await fetch(`${JBAPI}/b/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});return r.ok;}catch(e){return false;}}
+async function syncNow(){
+  if(!syncBinId||syncing)return;syncing=true;setSyncDot('spin');
+  try{
+    const remote=await readBin(syncBinId);if(!remote){setSyncDot('err');return;}
+    const lh=JSON.stringify({events,birthdays}),rh=JSON.stringify({events:remote.events||[],birthdays:remote.birthdays||[]});
+    if(remote.updated>(+localStorage.getItem('cal_lw')||0)&&rh!==lh){
+      events=remote.events||[];birthdays=remote.birthdays||[];saveAll(false);renderCal();renderWidget();showToast('📥 동기화됨');
+    } else if(lh!==lastHash){
+      await writeBin(syncBinId,{code:syncCode,events,birthdays,updated:Date.now()});localStorage.setItem('cal_lw',Date.now());lastHash=lh;
+    }
+    setSyncDot('on');
+  }catch(e){setSyncDot('err');}finally{syncing=false;}
+}
+function startSyncPoll(){if(syncIv)clearInterval(syncIv);syncIv=setInterval(syncNow,15000);syncNow();}
+function stopSync(){if(syncIv){clearInterval(syncIv);syncIv=null;}syncCode=null;syncBinId=null;localStorage.removeItem('cal_syncCode');localStorage.removeItem('cal_syncBinId');setSyncDot('');}
+
+// ════════════════════════════════
+// TOAST
+// ════════════════════════════════
+let toastT=null;
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');if(toastT)clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2500);}
+
+// ════════════════════════════════
+// WIRING
+// ════════════════════════════════
+// Widget view
+document.getElementById('wPrev').onclick=()=>{wDate.setMonth(wDate.getMonth()-1);renderWidget();};
+document.getElementById('wNext').onclick=()=>{wDate.setMonth(wDate.getMonth()+1);renderWidget();};
+document.getElementById('wTodayDot').onclick=()=>{wDate=new Date();renderWidget();};
+document.getElementById('wQuickAdd').onclick=()=>openEvtModal(null,null,'evt');
+document.getElementById('wOpenFull').onclick=()=>{curDate=new Date(wDate);renderCal();showView('calView');};
+
+// Full calendar
+document.getElementById('cBack').onclick=()=>showView('widgetView');
+document.getElementById('cPrev').onclick=()=>{if(calView_==='month')curDate.setMonth(curDate.getMonth()-1);else curDate.setDate(curDate.getDate()-7);renderCal();};
+document.getElementById('cNext').onclick=()=>{if(calView_==='month')curDate.setMonth(curDate.getMonth()+1);else curDate.setDate(curDate.getDate()+7);renderCal();};
+document.getElementById('cToday').onclick=()=>{curDate=new Date();renderCal();};
+document.getElementById('calFab').onclick=()=>openEvtModal(null,null,'evt');
+document.getElementById('vMonth').onclick=()=>{calView_='month';document.getElementById('vMonth').classList.add('active');document.getElementById('vWeek').classList.remove('active');renderCal();};
+document.getElementById('vWeek').onclick=()=>{calView_='week';document.getElementById('vWeek').classList.add('active');document.getElementById('vMonth').classList.remove('active');renderCal();};
+document.getElementById('cBday').onclick=openBlPanel;
+document.getElementById('cSync').onclick=()=>{
+  const c=document.getElementById('myCode'),s=document.getElementById('syncSt');
+  if(syncCode){c.textContent=syncCode;s.textContent='✅ 연동 중';s.className='sync-st ok';}
+  else{c.textContent='------';s.textContent='코드를 생성하면 다른 기기에서 연결할 수 있어요';s.className='sync-st';}
+  document.getElementById('joinInput').value='';
+  document.getElementById('syncOverlay').classList.remove('hidden');
+};
+
+// Modal tabs
+document.getElementById('tabEvt').onclick=()=>switchTab('evt');
+document.getElementById('tabBdy').onclick=()=>switchTab('bdy');
+document.getElementById('bSolarBtn').onclick=()=>setBdType('solar');
+document.getElementById('bLunarBtn').onclick=()=>setBdType('lunar');
+document.getElementById('bMonth').onchange=updateBDays;
+
+// Overlays dismiss
+document.getElementById('evtOverlay').addEventListener('click',function(e){if(e.target===this)closeEvtModal();});
+document.getElementById('detOverlay').addEventListener('click',function(e){if(e.target===this)closeDet();});
+document.getElementById('blOverlay').addEventListener('click',function(e){if(e.target===this)closeBlPanel();});
+document.getElementById('syncOverlay').addEventListener('click',function(e){if(e.target===this)document.getElementById('syncOverlay').classList.add('hidden');});
+document.getElementById('blClose').onclick=closeBlPanel;
+document.getElementById('blAdd').onclick=()=>{closeBlPanel();openEvtModal(null,null,'bdy');};
+document.getElementById('syncClose').onclick=()=>document.getElementById('syncOverlay').classList.add('hidden');
+document.getElementById('btnCreate').onclick=async()=>{document.getElementById('btnCreate').textContent='생성 중...';await createBin();document.getElementById('btnCreate').textContent='새 공유 코드 생성';};
+document.getElementById('btnCopy').onclick=()=>{if(!syncCode){showToast('먼저 코드를 생성해주세요');return;}navigator.clipboard.writeText(syncCode).then(()=>showToast('📋 복사됨!')).catch(()=>showToast(syncCode));};
+document.getElementById('btnJoin').onclick=()=>showToast('코드 생성 기기에서 Bin ID 공유 필요');
+document.getElementById('joinInput').addEventListener('input',function(){this.value=this.value.toUpperCase();});
+document.getElementById('btnDisc').onclick=()=>{stopSync();document.getElementById('myCode').textContent='------';document.getElementById('syncSt').textContent='연동 해제됨';document.getElementById('syncSt').className='sync-st';showToast('연동 해제됨');};
+
+// Install banner
+document.getElementById('installClose').onclick=()=>{document.getElementById('installBanner').classList.add('hidden');localStorage.setItem('cal_ib','1');};
+if(localStorage.getItem('cal_ib')||window.matchMedia('(display-mode:standalone)').matches||navigator.standalone)document.getElementById('installBanner').classList.add('hidden');
+
+// Swipe
+let tx=0,ty=0;
+document.getElementById('calBody').addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
+document.getElementById('calBody').addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;
+  if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>55){if(dx<0){if(calView_==='month')curDate.setMonth(curDate.getMonth()+1);else curDate.setDate(curDate.getDate()+7);}else{if(calView_==='month')curDate.setMonth(curDate.getMonth()-1);else curDate.setDate(curDate.getDate()-7);}renderCal();}
+},{passive:true});
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeEvtModal();closeDet();closeBlPanel();document.getElementById('syncOverlay').classList.add('hidden');}});
+
+// URL param: auto-open add modal
+if(new URLSearchParams(location.search).get('action')==='add'){openEvtModal(null,null,'evt');}
+
+// ── INIT ──
+if(syncBinId)startSyncPoll();
+renderWidget();
+</script>
+</body>
+</html>
